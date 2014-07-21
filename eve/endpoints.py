@@ -18,7 +18,7 @@ from eve.render import send_response
 from eve.auth import requires_auth
 from eve.utils import resource_uri, config, request_method, \
     debug_error_message
-from flask import abort, request, current_app as app
+from flask import abort, request
 
 
 def collections_endpoint(**lookup):
@@ -118,22 +118,12 @@ def home_endpoint():
     """
     if config.HATEOAS:
         response = {}
-        links_map = {}
+        links = []
         for resource in config.DOMAIN.keys():
             if not resource.endswith(config.VERSIONS):
                 links.append({'href': '%s' % resource_uri(resource),
                               'title': '%s' %
                               config.DOMAIN[resource]['resource_title']})
-                href = '/%s' % resource_uri(resource)
-                if not links_map.get(href, ''):
-                    links_map.update({href:
-                                      '%s' % config.DOMAIN[resource]['resource_title']})
-        for rule in app.url_map._rules:
-            rule = str(rule)
-            if not links_map.get(rule, ''):
-                if rule != '/':
-                    links_map.update({'%s' % rule: '%s' % rule})
-        links = [{'href': k, 'title': v} for k, v in links_map.items() if not k.endswith(':_id>')]
         response[config.LINKS] = {'child': links}
         return send_response(None, (response,))
     else:
