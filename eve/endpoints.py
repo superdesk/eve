@@ -16,8 +16,9 @@ from eve.methods import get, getitem, post, patch, delete, deleteitem, put
 from eve.methods.common import ratelimit
 from eve.render import send_response
 from eve.auth import requires_auth
-from eve.utils import config, request_method, debug_error_message
-from flask import abort, request, current_app as app
+from eve.utils import resource_uri, config, request_method, \
+    debug_error_message
+from flask import abort, request
 
 
 def collections_endpoint(**lookup):
@@ -106,9 +107,6 @@ def item_endpoint(**lookup):
 def home_endpoint():
     """ Home/API entry point. Will provide links to each available resource
 
-    .. versionchanged:: 0.5
-       Resource URLs are relative to API root.
-
     .. versionchanged:: 0.4
        Prevent versioning collections from being added in links.
 
@@ -120,19 +118,12 @@ def home_endpoint():
     """
     if config.HATEOAS:
         response = {}
-        links_map = {}
+        links = []
         for resource in config.DOMAIN.keys():
             if not resource.endswith(config.VERSIONS):
-                href = '/%s' % config.URLS[resource]
-                if not links_map.get(href, ''):
-                    links_map.update({href:
-                                      '%s' % config.DOMAIN[resource]['resource_title']})
-        for rule in app.url_map._rules:
-            rule = str(rule)
-            if not links_map.get(rule, ''):
-                if rule != '/':
-                    links_map.update({'%s' % rule: '%s' % rule})
-        links = [{'href': k, 'title': v} for k, v in links_map.items() if not k.endswith(':_id>')]
+                links.append({'href': '%s' % resource_uri(resource),
+                              'title': '%s' %
+                              config.DOMAIN[resource]['resource_title']})
         response[config.LINKS] = {'child': links}
         return send_response(None, (response,))
     else:

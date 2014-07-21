@@ -170,13 +170,46 @@ def date_to_str(date):
 def home_link():
     """ Returns a link to the API entry point/home page.
 
-    .. versionchanged:: 0.5
-       Link is relative to API root.
-
     .. versionchanged:: 0.0.3
        Now returning a JSON link.
     """
-    return {'title': 'home', 'href': '/'}
+    return {'title': 'home',
+            'href': home_uri()}
+
+
+def home_uri():
+    """ Returns a absolute URI to API home.
+
+    .. versionchanged:: 0.4
+       Added support for URL_PROTOCOL
+       Refactored from home_link
+
+    .. versionchanged:: 0.1.1
+       Handle the case of SERVER_NAME being None.
+
+    .. versionadded:: 0.4
+    """
+    server_name = config.SERVER_NAME if config.SERVER_NAME else ''
+    if config.URL_PROTOCOL:
+        server_name = '%s://%s' % (config.URL_PROTOCOL, server_name)
+    return '%s%s' % (server_name, api_prefix())
+
+
+def resource_uri(resource):
+    """ Returns the absolute URI to a resource.
+
+    .. versionchanged:: 0.1.1
+       URL prefixes are now included in config.URLS items, no more need to
+       explicitly add them to resource links.
+
+       Handle the case of SERVER_NAME being None.
+
+    .. versionchanged:: 0.1.0
+       No more trailing slashes in links.
+
+    :param resource: the resource name.
+    """
+    return '%s/%s' % (home_uri(), config.URLS[resource])
 
 
 def api_prefix(url_prefix=None, api_version=None):
@@ -290,34 +323,14 @@ def validate_filters(where, resource):
     :param where: the where clause, as a dict.
     :param resource: the resource being inspected.
 
-    .. versionchanged: 0.5
-       If the data layer supports a list of allowed operators, take them
-       into consideration when validating the query string (#388).
-       Recursively validate the whole query string.
-
     .. versionadded: 0.0.9
     """
-    operators = getattr(app.data, 'operators', set())
-    allowed = config.DOMAIN[resource]['allowed_filters'] + list(operators)
-
-    def validate_filter(filters):
-        r = None
-        for d in filters:
-            for key, value in d.items():
-                if key not in allowed:
-                    return "filter on '%s' not allowed" % key
-                if isinstance(value, dict):
-                    r = validate_filter([value])
-                elif isinstance(value, list):
-                    r = validate_filter(value)
-
-            # flake8: noqa
-                if r: break
-            if r: break
-
-        return r
-
-    return validate_filter([where]) if '*' not in allowed else None
+    allowed = config.DOMAIN[resource]['allowed_filters']
+    if '*' not in allowed:
+        for filt, _ in where.items():
+            if filt not in allowed:
+                return "filter on '%s' not allowed" % filt
+    return None
 
 
 def auto_fields(resource):
