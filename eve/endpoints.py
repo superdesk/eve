@@ -121,9 +121,10 @@ def home_endpoint():
         links = []
         for resource in config.DOMAIN.keys():
             if not resource.endswith(config.VERSIONS):
-                links.append({'href': '%s' % resource_uri(resource),
-                              'title': '%s' %
-                              config.DOMAIN[resource]['resource_title']})
+                if not bool(config.DOMAIN[resource].get('internal_resource', False)):
+                    links.append({'href': '%s' % resource_uri(resource),
+                                  'title': '%s' %
+                                  config.DOMAIN[resource]['resource_title']})
         for bp in app.blueprints:
             blueprint_name = str(bp) + '.'
             for rule in app.url_map.iter_rules():
