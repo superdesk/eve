@@ -17,7 +17,7 @@ from eve.methods.common import ratelimit
 from eve.render import send_response
 from eve.auth import requires_auth
 from eve.utils import resource_uri, config, request_method, \
-    debug_error_message, home_uri
+    debug_error_message, home_uri, api_prefix
 from flask import abort, request, current_app as app
 
 
@@ -130,7 +130,8 @@ def home_endpoint():
             for rule in app.url_map.iter_rules():
                 if rule.endpoint.startswith(blueprint_name):
                     title = rule.endpoint.replace(blueprint_name, '', 1)
-                    links.append({'href': '%s%s' % (home_uri(), rule.rule),
+                    href = rule.rule.replace(api_prefix(), '', 1)
+                    links.append({'href': '%s%s' % (home_uri(), href),
                                   'title': title})
 
         response[config.LINKS] = {'child': links}
