@@ -1,6 +1,7 @@
 /.project
 /.pydevproject
 /.settings
+.ropeproject
 # Eve
 run.py
 settings.py
