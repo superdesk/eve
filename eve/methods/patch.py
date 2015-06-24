@@ -212,6 +212,9 @@ def patch_internal(resource, payload=None, concurrency_check=False,
             getattr(app, "on_updated")(resource, updates, original)
             getattr(app, "on_updated_%s" % resource)(updates, original)
 
+            # Patch the result again if more changes to the payload occured
+            updated.update(updates)
+
             # build the full response document
             build_response_document(
                 updated, resource, embedded_fields, updated)
