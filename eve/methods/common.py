@@ -385,15 +385,16 @@ def serialize(document, resource=None, schema=None, fields=None):
                             target[field] = \
                                 app.data.serializers[field_type](target[field])
                 elif field_type in app.data.serializers:
-                    # a simple field
-                    try:
-                        document[field] = \
-                            app.data.serializers[field_type](document[field])
-                    except (ValueError, InvalidId):
-                        # value can't be casted, we continue processing the
-                        # rest of the document. Validation will later report
-                        # back the issue.
-                        pass
+                    if not (field_type == "objectid" and field_schema.get('nullable') and document[field] is None):
+                            # a simple field
+                        try:
+                            document[field] = \
+                                app.data.serializers[field_type](document[field])
+                        except (ValueError, InvalidId):
+                            # value can't be casted, we continue processing the
+                            # rest of the document. Validation will later report
+                            # back the issue.
+                            pass
     return document
 
 
