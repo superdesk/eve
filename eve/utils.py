@@ -240,7 +240,7 @@ def api_prefix(url_prefix=None, api_version=None):
 
 
 def querydef(max_results=config.PAGINATION_DEFAULT, where=None, sort=None,
-             version=None, page=None):
+             version=None, page=None, other_params=[]):
     """ Returns a valid query string.
 
     :param max_results: `max_result` part of the query string. Defaults to
@@ -249,6 +249,8 @@ def querydef(max_results=config.PAGINATION_DEFAULT, where=None, sort=None,
     :param sort: `sort` part of the query string. Defaults to None.
     :param page: `version` part of the query string. Defaults to None.
     :param page: `page` part of the query string. Defaults to None.
+    :param other_params: dictionary of parameters that are not used
+                         internally by Eve 
 
     .. versionchanged:: 0.5
        Support for customizable query parameters.
@@ -262,6 +264,8 @@ def querydef(max_results=config.PAGINATION_DEFAULT, where=None, sort=None,
         else ''
     max_results_part = '%s=%s' % (config.QUERY_MAX_RESULTS, max_results) \
         if max_results != config.PAGINATION_DEFAULT else ''
+    other_params_part = ''.join(['&%s=%s' % (key, value) for key, value \
+                                 in other_params.items()])
 
     # remove sort set by Eve if version is set
     if version and sort is not None:
@@ -269,7 +273,8 @@ def querydef(max_results=config.PAGINATION_DEFAULT, where=None, sort=None,
             if sort != '[("%s", 1)]' % config.VERSION else ''
 
     return ('?' + ''.join([max_results_part, where_part, sort_part,
-                           version_part, page_part]).lstrip('&')).rstrip('?')
+                           version_part, page_part, other_params_part])
+            .lstrip('&')).rstrip('?')
 
 
 def document_etag(value, ignore_fields=None):
