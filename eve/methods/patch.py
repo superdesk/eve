@@ -206,8 +206,8 @@ async def patch_internal(
             updated = deepcopy(original)
 
             # notify callbacks
-            getattr(app, "on_update")(resource, updates, original)
-            getattr(app, "on_update_%s" % resource)(updates, original)
+            await getattr(app, "on_update").call_async(resource, updates, original)
+            await getattr(app, "on_update_%s" % resource).call_async(updates, original)
 
             if resource_def["merge_nested_documents"]:
                 updates = resolve_nested_documents(updates, updated)
@@ -225,13 +225,13 @@ async def patch_internal(
                     abort(412, description="Client and server etags don't match")
 
             # update oplog if needed
-            oplog_push(resource, updates, "PATCH", object_id)
+            await oplog_push(resource, updates, "PATCH", object_id)
 
             insert_versioning_documents(resource, updated)
 
             # nofity callbacks
-            getattr(app, "on_updated")(resource, updates, original)
-            getattr(app, "on_updated_%s" % resource)(updates, original)
+            await getattr(app, "on_updated").call_async(resource, updates, original)
+            await getattr(app, "on_updated_%s" % resource).call_async(updates, original)
 
             updated.update(updates)
 

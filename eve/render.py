@@ -46,17 +46,17 @@ def raise_event(f):
     """
 
     @wraps(f)
-    def decorated(*args, **kwargs):
-        r = f(*args, **kwargs)
+    async def decorated(*args, **kwargs):
+        r = await f(*args, **kwargs)
         method = request.method
         if method in ("GET", "POST", "PATCH", "DELETE", "PUT"):
             event_name = "on_post_" + method
             resource = args[0] if args else None
             # general hook
-            getattr(app, event_name)(resource, request, r)
+            await getattr(app, event_name).call_async(resource, request, r)
             if resource:
                 # resource hook
-                getattr(app, event_name + "_" + resource)(request, r)
+                await getattr(app, event_name + "_" + resource).call_async(request, r)
         return r
 
     return decorated

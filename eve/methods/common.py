@@ -1335,7 +1335,7 @@ def pre_event(f):
     """
 
     @wraps(f)
-    def decorated(*args, **kwargs):
+    async def decorated(*args, **kwargs):
         method = request.method
         if method == "HEAD":
             method = "GET"
@@ -1358,12 +1358,12 @@ def pre_event(f):
             rh_params = (request,)
 
         # general hook
-        getattr(app, event_name)(*gh_params)
+        await getattr(app, event_name).call_async(*gh_params)
         if resource:
             # resource hook
-            getattr(app, event_name + "_" + resource)(*rh_params)
+            await getattr(app, event_name + "_" + resource).call_async(*rh_params)
 
-        r = f(resource, **combined_args)
+        r = await f(resource, **combined_args)
         return r
 
     return decorated
@@ -1436,7 +1436,7 @@ def resource_link(resource=None):
     return path
 
 
-def oplog_push(resource, document, op, id=None):
+async def oplog_push(resource, document, op, id=None):
     """Pushes an edit operation to the oplog if included in OPLOG_METHODS. To
     save on storage space (at least on MongoDB) field names are shortened:
 
@@ -1523,7 +1523,7 @@ def oplog_push(resource, document, op, id=None):
 
     if entries:
         # notify callbacks
-        getattr(app, "on_oplog_push")(resource, entries)
+        await getattr(app, "on_oplog_push").call_async(resource, entries)
         # oplog push
         app.data.insert(config.OPLOG_NAME, entries)
 

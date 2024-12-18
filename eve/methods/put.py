@@ -196,8 +196,8 @@ async def put_internal(
             resolve_document_version(document, resource, "PUT", original)
 
             # notify callbacks
-            getattr(app, "on_replace")(resource, document, original)
-            getattr(app, "on_replace_%s" % resource)(document, original)
+            await getattr(app, "on_replace").call_async(resource, document, original)
+            await getattr(app, "on_replace_%s" % resource).call_async(document, original)
 
             resolve_document_etag(document, resource)
 
@@ -209,13 +209,13 @@ async def put_internal(
                     abort(412, description="Client and server etags don't match")
 
             # update oplog if needed
-            oplog_push(resource, document, "PUT")
+            await oplog_push(resource, document, "PUT")
 
             insert_versioning_documents(resource, document)
 
             # notify callbacks
-            getattr(app, "on_replaced")(resource, document, original)
-            getattr(app, "on_replaced_%s" % resource)(document, original)
+            await getattr(app, "on_replaced").call_async(resource, document, original)
+            await getattr(app, "on_replaced_%s" % resource).call_async(document, original)
 
             # build the full response document
             build_response_document(document, resource, embedded_fields, document)

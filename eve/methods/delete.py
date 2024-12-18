@@ -102,8 +102,8 @@ async def deleteitem_internal(
 
     # notify callbacks
     if not suppress_callbacks:
-        getattr(app, "on_delete_item")(resource, original)
-        getattr(app, "on_delete_item_%s" % resource)(original)
+        await getattr(app, "on_delete_item").call_async(resource, original)
+        await getattr(app, "on_delete_item_%s" % resource).call_async(original)
 
     if soft_delete_enabled:
         # Instead of removing the document from the db, just mark it as deleted
@@ -132,7 +132,7 @@ async def deleteitem_internal(
         # and add deleted version
         insert_versioning_documents(resource, marked_document)
         # update oplog if needed
-        oplog_push(resource, marked_document, "DELETE", id)
+        await oplog_push(resource, marked_document, "DELETE", id)
 
     else:
         # Delete the document for real
@@ -172,11 +172,11 @@ async def deleteitem_internal(
             )
 
         # update oplog if needed
-        oplog_push(resource, original, "DELETE", id)
+        await oplog_push(resource, original, "DELETE", id)
 
     if not suppress_callbacks:
-        getattr(app, "on_deleted_item")(resource, original)
-        getattr(app, "on_deleted_item_%s" % resource)(original)
+        await getattr(app, "on_deleted_item").call_async(resource, original)
+        await getattr(app, "on_deleted_item_%s" % resource).call_async(original)
 
     return all_done()
 
@@ -206,8 +206,8 @@ async def delete(resource, **lookup):
     """
 
     resource_def = config.DOMAIN[resource]
-    getattr(app, "on_delete_resource")(resource)
-    getattr(app, "on_delete_resource_%s" % resource)()
+    await getattr(app, "on_delete_resource").call_async(resource)
+    await getattr(app, "on_delete_resource_%s" % resource).call_async()
     default_request = ParsedRequest()
     if resource_def["soft_delete"]:
         # get_document should always fetch soft deleted documents from the db
@@ -218,8 +218,8 @@ async def delete(resource, **lookup):
     if not originals:
         return all_done()
     # I add new callback as I want the framework to be retro-compatible
-    getattr(app, "on_delete_resource_originals")(resource, originals, lookup)
-    getattr(app, "on_delete_resource_originals_%s" % resource)(originals, lookup)
+    await getattr(app, "on_delete_resource_originals").call_async(resource, originals, lookup)
+    await getattr(app, "on_delete_resource_originals_%s" % resource).call_async(originals, lookup)
     id_field = resource_def["id_field"]
 
     if resource_def["soft_delete"]:
@@ -250,7 +250,7 @@ async def delete(resource, **lookup):
         if resource_def["versioning"] is True:
             app.data.remove(resource + config.VERSIONS, lookup)
 
-    getattr(app, "on_deleted_resource")(resource)
-    getattr(app, "on_deleted_resource_%s" % resource)()
+    await getattr(app, "on_deleted_resource").call_async(resource)
+    await getattr(app, "on_deleted_resource_%s" % resource).call_async()
 
     return all_done()

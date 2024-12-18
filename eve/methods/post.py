@@ -243,8 +243,8 @@ async def post_internal(resource, payl=None, skip_validation=False):
         return_code = config.VALIDATION_ERROR_STATUS
     else:
         # notify callbacks
-        getattr(app, "on_insert")(resource, documents)
-        getattr(app, "on_insert_%s" % resource)(documents)
+        await getattr(app, "on_insert").call_async(resource, documents)
+        await getattr(app, "on_insert_%s" % resource).call_async(documents)
 
         # compute etags here as documents might have been updated by callbacks.
         resolve_document_etag(documents, resource)
@@ -253,7 +253,7 @@ async def post_internal(resource, payl=None, skip_validation=False):
         ids = app.data.insert(resource, documents)
 
         # update oplog if needed
-        oplog_push(resource, documents, "POST")
+        await oplog_push(resource, documents, "POST")
 
         # assign document ids
         for document in documents:
@@ -277,8 +277,8 @@ async def post_internal(resource, payl=None, skip_validation=False):
         insert_versioning_documents(resource, documents)
 
         # notify callbacks
-        getattr(app, "on_inserted")(resource, documents)
-        getattr(app, "on_inserted_%s" % resource)(documents)
+        await getattr(app, "on_inserted").call_async(resource, documents)
+        await getattr(app, "on_inserted_%s" % resource).call_async(documents)
         # request was received and accepted; at least one document passed
         # validation and was accepted for insertion.
 

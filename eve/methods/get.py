@@ -285,8 +285,8 @@ async def _perform_find(resource, lookup):
     # functions modify the documents, the last_modified and etag won't be
     # updated to reflect the changes (they always reflect the documents
     # state on the database.)
-    getattr(app, "on_fetched_resource")(resource, response)
-    getattr(app, "on_fetched_resource_%s" % resource)(response)
+    await getattr(app, "on_fetched_resource").call_async(resource, response)
+    await getattr(app, "on_fetched_resource_%s" % resource).call_async(response)
 
     # the 'extra' cursor field, if present, will be added to the response.
     # Can be used by Eve extensions to add extra, custom data to any
@@ -524,15 +524,15 @@ async def getitem_internal(resource, **lookup):
             versions = response[config.ITEMS]
 
         if version == "diffs":
-            getattr(app, "on_fetched_diffs")(resource, versions)
-            getattr(app, "on_fetched_diffs_%s" % resource)(versions)
+            await getattr(app, "on_fetched_diffs").call_async(resource, versions)
+            await getattr(app, "on_fetched_diffs_%s" % resource).call_async(versions)
         else:
             for version_item in versions:
-                getattr(app, "on_fetched_item")(resource, version_item)
-                getattr(app, "on_fetched_item_%s" % resource)(version_item)
+                await getattr(app, "on_fetched_item").call_async(resource, version_item)
+                await getattr(app, "on_fetched_item_%s" % resource).call_async(version_item)
     else:
-        getattr(app, "on_fetched_item")(resource, response)
-        getattr(app, "on_fetched_item_%s" % resource)(response)
+        await getattr(app, "on_fetched_item").call_async(resource, response)
+        await getattr(app, "on_fetched_item_%s" % resource).call_async(response)
 
     return response, last_modified, etag, 200
 

@@ -15,7 +15,7 @@ import os
 import sys
 import warnings
 
-from events import Events
+from .events import Events
 from quart import Quart
 from werkzeug.routing import BaseConverter
 
