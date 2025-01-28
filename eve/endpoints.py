@@ -153,6 +153,8 @@ async def home_endpoint():
                 }
             )
 
+        await getattr(app, "on_get_api_root").call_async(links)
+
         response[config.LINKS] = {"child": links}
         return await send_response(None, (response,))
     return await send_response(None, (response,))
