@@ -11,6 +11,7 @@
     :license: BSD, see LICENSE for more details.
 """
 from __future__ import division
+from inspect import isawaitable
 
 import copy
 import math
@@ -252,13 +253,18 @@ async def _perform_find(resource, lookup):
     # If-Modified-Since disabled on collections (#334)
     req.if_modified_since = None
 
-    cursor, count = app.data.find(
+    find_response = app.data.find(
         resource, req, lookup, perform_count=not config.OPTIMIZE_PAGINATION_FOR_SPEED
     )
+    if isawaitable(find_response):
+        cursor, count = await find_response
+    else:
+        cursor, count = find_response
+
     # If soft delete is enabled, data.find will not include items marked
     # deleted unless req.show_deleted is True
     for document in cursor:
-        build_response_document(document, resource, embedded_fields)
+        await build_response_document(document, resource, embedded_fields)
         documents.append(document)
 
         # build last update for entire response
@@ -383,6 +389,9 @@ async def getitem_internal(resource, **lookup):
         req.show_deleted = True
 
     document = app.data.find_one(resource, req, **lookup)
+    if isawaitable(document):
+        document = await document
+
     if not document:
         abort(404)
 
@@ -402,7 +411,7 @@ async def getitem_internal(resource, **lookup):
         document = get_old_document(resource, req, lookup, document, version)
 
     # meld into response document
-    build_response_document(document, resource, embedded_fields, latest_doc)
+    await build_response_document(document, resource, embedded_fields, latest_doc)
     if config.IF_MATCH:
         etag = document[config.ETAG]
         if resource_def["versioning"] is True:
@@ -443,7 +452,12 @@ async def getitem_internal(resource, **lookup):
             # default sort for 'all', required sort for 'diffs'
             req.sort = '[("%s", 1)]' % config.VERSION
         req.if_modified_since = None  # we always want the full history here
-        cursor, count = app.data.find(resource + config.VERSIONS, req, lookup)
+
+        find_response = app.data.find(resource + config.VERSIONS, req, lookup)
+        if isawaitable(find_response):
+            cursor, count = await find_response
+        else:
+            cursor, count = find_response
 
         # build all versions
         documents = []
@@ -466,7 +480,7 @@ async def getitem_internal(resource, **lookup):
                 document = synthesize_versioned_document(
                     latest_doc, document, resource_def
                 )
-                build_response_document(document, resource, embedded_fields, latest_doc)
+                await build_response_document(document, resource, embedded_fields, latest_doc)
                 if version == "diffs":
                     if i == 0:
                         documents.append(document)

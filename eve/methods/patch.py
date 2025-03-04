@@ -11,6 +11,7 @@
 """
 
 from copy import deepcopy
+from inspect import isawaitable
 
 from cerberus.validator import DocumentError
 from quart import abort, current_app as app
@@ -142,7 +143,7 @@ async def patch_internal(
     if payload is None:
         payload = await payload_()
 
-    original = get_document(
+    original = await get_document(
         resource, concurrency_check, mongo_options=mongo_options, **lookup
     )
     if not original:
@@ -219,7 +220,9 @@ async def patch_internal(
                 # now storing the (updated) ETAG with every document (#453)
                 updates[config.ETAG] = updated[config.ETAG]
             try:
-                app.data.update(resource, object_id, updates, original)
+                response = app.data.update(resource, object_id, updates, original)
+                if isawaitable(response):
+                    await response
             except app.data.OriginalChangedError:
                 if concurrency_check:
                     abort(412, description="Client and server etags don't match")
@@ -236,7 +239,7 @@ async def patch_internal(
             updated.update(updates)
 
             # build the full response document
-            build_response_document(updated, resource, embedded_fields, updated)
+            await build_response_document(updated, resource, embedded_fields, updated)
             response = updated
             if config.IF_MATCH:
                 etag = response[config.ETAG]

@@ -9,6 +9,9 @@
     :copyright: (c) 2017 by Nicola Iarocci.
     :license: BSD, see LICENSE for more details.
 """
+
+from inspect import isawaitable
+
 import base64
 import re
 import time
@@ -34,7 +37,7 @@ from eve.utils import (
 from eve.versioning import get_data_version_relation_document, resolve_document_version
 
 
-def get_document(
+async def get_document(
     resource,
     concurrency_check,
     original=None,
@@ -95,6 +98,8 @@ def get_document(
             mongo_options=mongo_options,
             **lookup
         )
+        if isawaitable(document):
+            document = await document
 
     if document:
         e_if_m = config.ENFORCE_IF_MATCH
@@ -598,7 +603,7 @@ def normalize_dotted_fields(document):
                 normalize_dotted_fields(document[field])
 
 
-def build_response_document(document, resource, embedded_fields, latest_doc=None):
+async def build_response_document(document, resource, embedded_fields, latest_doc=None):
     """Prepares a document for response including generation of ETag and
     metadata fields.
 
@@ -666,7 +671,7 @@ def build_response_document(document, resource, embedded_fields, latest_doc=None
             return
 
     # resolve embedded documents
-    resolve_embedded_documents(document, resource, embedded_fields)
+    await resolve_embedded_documents(document, resource, embedded_fields)
 
 
 def resolve_resource_projection(document, resource):
@@ -850,7 +855,7 @@ def resolve_embedded_fields(resource, req):
     return enabled_embedded_fields
 
 
-def embedded_document(references, data_relation, field_name):
+async def embedded_document(references, data_relation, field_name):
     """Returns a document to be embedded by reference using data_relation
         taking into account document versions
 
@@ -892,7 +897,7 @@ def embedded_document(references, data_relation, field_name):
                     ),
                 )
 
-            build_response_document(
+            await build_response_document(
                 embedded_doc, data_relation["resource"], [], latest_embedded_doc
             )
             embedded_docs.append(embedded_doc)
@@ -903,9 +908,14 @@ def embedded_document(references, data_relation, field_name):
             subresources_query,
         ) = generate_query_and_sorting_criteria(data_relation, references)
         for subresource in subresources_query:
-            result, _ = app.data.find(
+            find_response = app.data.find(
                 subresource, None, subresources_query[subresource]
             )
+            if isawaitable(find_response):
+                result, _ = await find_response
+            else:
+                result, _ = find_response
+
             list_embedded_doc = list(result)
 
             if not list_embedded_doc:
@@ -1068,7 +1078,7 @@ def subdocuments(fields_chain, resource, document, prefix=""):
         yield document
 
 
-def resolve_embedded_documents(document, resource, embedded_fields):
+async def resolve_embedded_documents(document, resource, embedded_fields):
     """Loops through the documents, adding embedded representations
     of any fields that are (1) defined eligible for embedding in the
     DOMAIN and (2) requested to be embedded in the current `req`.
@@ -1109,7 +1119,7 @@ def resolve_embedded_documents(document, resource, embedded_fields):
         for subdocument in subdocuments(fields_chain[:-1], resource, document):
             if not subdocument or last_field not in subdocument:
                 continue
-            subdocument[last_field] = getter(subdocument[last_field])
+            subdocument[last_field] = await getter(subdocument[last_field])
 
 
 def resolve_media_files(document, resource):
@@ -1525,7 +1535,9 @@ async def oplog_push(resource, document, op, id=None):
         # notify callbacks
         await getattr(app, "on_oplog_push").call_async(resource, entries)
         # oplog push
-        app.data.insert(config.OPLOG_NAME, entries)
+        insert_response = app.data.insert(config.OPLOG_NAME, entries)
+        if isawaitable(insert_response):
+            await insert_response
 
 
 def utcnow():

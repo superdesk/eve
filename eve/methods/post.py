@@ -11,6 +11,8 @@
     :license: BSD, see LICENSE for more details.
 """
 
+from inspect import isawaitable
+
 from cerberus.validator import DocumentError
 from quart import abort, current_app as app
 
@@ -251,6 +253,8 @@ async def post_internal(resource, payl=None, skip_validation=False):
 
         # bulk insert
         ids = app.data.insert(resource, documents)
+        if isawaitable(ids):
+            ids = await ids
 
         # update oplog if needed
         await oplog_push(resource, documents, "POST")
@@ -264,7 +268,7 @@ async def post_internal(resource, payl=None, skip_validation=False):
 
             # build the full response document
             result = document
-            build_response_document(result, resource, embedded_fields, document)
+            await build_response_document(result, resource, embedded_fields, document)
 
             # add extra write meta data
             result[config.STATUS] = config.STATUS_OK

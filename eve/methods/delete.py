@@ -10,6 +10,7 @@
     :license: BSD, see LICENSE for more details.
 """
 
+from inspect import isawaitable
 import copy
 
 from quart import abort, current_app as app
@@ -90,7 +91,7 @@ async def deleteitem_internal(
     """
     resource_def = config.DOMAIN[resource]
     soft_delete_enabled = resource_def["soft_delete"]
-    original = get_document(
+    original = await get_document(
         resource,
         concurrency_check,
         original,
@@ -122,7 +123,9 @@ async def deleteitem_internal(
         # Update document in database (including version collection if needed)
         id = original[resource_def["id_field"]]
         try:
-            app.data.replace(resource, id, marked_document, original)
+            replace_response = app.data.replace(resource, id, marked_document, original)
+            if isawaitable(replace_response):
+                await replace_response
         except app.data.OriginalChangedError:
             if concurrency_check:
                 abort(412, description="Client and server etags don't match")
@@ -150,6 +153,8 @@ async def deleteitem_internal(
             # is still needed. Also, this lookup should never fail.
             # TODO not happy with this hack. Not at all. Is there a better way?
             original = app.data.find_one_raw(resource, **lookup)
+            if isawaitable(original):
+                original = await original
 
         for field in media_fields:
             if field in original:
@@ -161,15 +166,19 @@ async def deleteitem_internal(
                     app.media.delete(original[field], resource)
 
         id = original[resource_def["id_field"]]
-        app.data.remove(resource, lookup)
+        remove_response = app.data.remove(resource, lookup)
+        if isawaitable(remove_response):
+            await remove_response
 
         # TODO: should attempt to delete version collection even if setting is
         # off
         if app.config["DOMAIN"][resource]["versioning"] is True:
-            app.data.remove(
+            remove_response = app.data.remove(
                 resource + config.VERSIONS,
                 {versioned_id_field(resource_def): original[resource_def["id_field"]]},
             )
+            if isawaitable(remove_response):
+                await remove_response
 
         # update oplog if needed
         await oplog_push(resource, original, "DELETE", id)
@@ -213,7 +222,11 @@ async def delete(resource, **lookup):
         # get_document should always fetch soft deleted documents from the db
         # callers must handle soft deleted documents
         default_request.show_deleted = True
-    result, _ = app.data.find(resource, default_request, lookup)
+    find_response = app.data.find(resource, default_request, lookup)
+    if isawaitable(find_response):
+        result, _ = await find_response
+    else:
+        result, _ = find_response
     originals = list(result)
     if not originals:
         return all_done()
@@ -243,12 +256,16 @@ async def delete(resource, **lookup):
         # deleted by use of this global method (it should be disabled). Media
         # cleanup is handled at the item endpoint by the delete() method
         # (see above).
-        app.data.remove(resource, lookup)
+        remove_response = app.data.remove(resource, lookup)
+        if isawaitable(remove_response):
+            await remove_response
 
         # TODO: should attempt to delete version collection even if setting is
         # off
         if resource_def["versioning"] is True:
-            app.data.remove(resource + config.VERSIONS, lookup)
+            remove_response = app.data.remove(resource + config.VERSIONS, lookup)
+            if isawaitable(remove_response):
+                await remove_response
 
     await getattr(app, "on_deleted_resource").call_async(resource)
     await getattr(app, "on_deleted_resource_%s" % resource).call_async()

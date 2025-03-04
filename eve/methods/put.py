@@ -10,6 +10,8 @@
     :license: BSD, see LICENSE for more details.
 """
 
+from inspect import isawaitable
+
 from cerberus.validator import DocumentError
 from quart import abort, current_app as app
 from werkzeug import exceptions
@@ -124,7 +126,7 @@ async def put_internal(
     # but returning the document owner in the projection. This allows us to
     # prevent PUT if the document exists, but is owned by a different user
     # than the currently authenticated one.
-    original = get_document(
+    original = await get_document(
         resource,
         concurrency_check,
         check_auth_value=False,
@@ -203,7 +205,9 @@ async def put_internal(
 
             # write to db
             try:
-                app.data.replace(resource, object_id, document, original)
+                replace_response = app.data.replace(resource, object_id, document, original)
+                if isawaitable(replace_response):
+                    await replace_response
             except app.data.OriginalChangedError:
                 if concurrency_check:
                     abort(412, description="Client and server etags don't match")
@@ -218,7 +222,7 @@ async def put_internal(
             await getattr(app, "on_replaced_%s" % resource).call_async(document, original)
 
             # build the full response document
-            build_response_document(document, resource, embedded_fields, document)
+            await build_response_document(document, resource, embedded_fields, document)
             response = document
             if config.IF_MATCH:
                 etag = response[config.ETAG]
