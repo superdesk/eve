@@ -37,6 +37,14 @@ from eve.utils import (
 from eve.versioning import get_data_version_relation_document, resolve_document_version
 
 
+async def async_data_wrapper(method: str, *args, **kwargs):
+    func = getattr(app.data, f"{method}_async", getattr(app.data, method))
+    response = func(*args, **kwargs)
+    if isawaitable(response):
+        response = await response
+    return response
+
+
 async def get_document(
     resource,
     concurrency_check,
@@ -90,7 +98,8 @@ async def get_document(
     if original:
         document = original
     else:
-        document = app.data.find_one(
+        document = await async_data_wrapper(
+            "find_one",
             resource,
             req,
             check_auth_value,
@@ -98,8 +107,6 @@ async def get_document(
             mongo_options=mongo_options,
             **lookup
         )
-        if isawaitable(document):
-            document = await document
 
     if document:
         e_if_m = config.ENFORCE_IF_MATCH
@@ -908,13 +915,9 @@ async def embedded_document(references, data_relation, field_name):
             subresources_query,
         ) = generate_query_and_sorting_criteria(data_relation, references)
         for subresource in subresources_query:
-            find_response = app.data.find(
-                subresource, None, subresources_query[subresource]
+            result, _ = await async_data_wrapper(
+                "find", subresource, None, subresources_query[subresource]
             )
-            if isawaitable(find_response):
-                result, _ = await find_response
-            else:
-                result, _ = find_response
 
             list_embedded_doc = list(result)
 
@@ -1535,9 +1538,7 @@ async def oplog_push(resource, document, op, id=None):
         # notify callbacks
         await getattr(app, "on_oplog_push").call_async(resource, entries)
         # oplog push
-        insert_response = app.data.insert(config.OPLOG_NAME, entries)
-        if isawaitable(insert_response):
-            await insert_response
+        await async_data_wrapper("insert", config.OPLOG_NAME, entries)
 
 
 def utcnow():

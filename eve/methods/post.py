@@ -11,8 +11,6 @@
     :license: BSD, see LICENSE for more details.
 """
 
-from inspect import isawaitable
-
 from cerberus.validator import DocumentError
 from quart import abort, current_app as app
 
@@ -23,7 +21,7 @@ from eve.methods.common import (build_response_document,
                                 resolve_document_etag, resolve_embedded_fields,
                                 resolve_sub_resource_path,
                                 resolve_user_restricted_access, resource_link,
-                                store_media_files, utcnow)
+                                store_media_files, utcnow, async_data_wrapper)
 from eve.utils import config, debug_error_message, parse_request
 from eve.versioning import (insert_versioning_documents,
                             resolve_document_version)
@@ -252,9 +250,7 @@ async def post_internal(resource, payl=None, skip_validation=False):
         resolve_document_etag(documents, resource)
 
         # bulk insert
-        ids = app.data.insert(resource, documents)
-        if isawaitable(ids):
-            ids = await ids
+        ids = await async_data_wrapper("insert", resource, documents)
 
         # update oplog if needed
         await oplog_push(resource, documents, "POST")

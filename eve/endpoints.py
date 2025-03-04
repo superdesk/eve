@@ -58,7 +58,7 @@ async def collections_endpoint(**lookup):
     elif method == "POST":
         response = await post(resource)
     elif method == "DELETE":
-        response = delete(resource, lookup)
+        response = await delete(resource, lookup)
     elif method == "OPTIONS":
         await send_response(resource, response)
     else:

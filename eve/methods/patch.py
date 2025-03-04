@@ -11,7 +11,6 @@
 """
 
 from copy import deepcopy
-from inspect import isawaitable
 
 from cerberus.validator import DocumentError
 from quart import abort, current_app as app
@@ -19,7 +18,7 @@ from werkzeug import exceptions
 
 from eve.auth import requires_auth
 from eve.methods.common import (build_response_document, get_document,
-                                marshal_write_response, oplog_push, parse)
+                                marshal_write_response, oplog_push, parse, async_data_wrapper)
 from eve.methods.common import payload as payload_
 from eve.methods.common import (pre_event, ratelimit, resolve_document_etag,
                                 resolve_embedded_fields, store_media_files,
@@ -220,9 +219,7 @@ async def patch_internal(
                 # now storing the (updated) ETAG with every document (#453)
                 updates[config.ETAG] = updated[config.ETAG]
             try:
-                response = app.data.update(resource, object_id, updates, original)
-                if isawaitable(response):
-                    await response
+                await async_data_wrapper("update", resource, object_id, updates, original)
             except app.data.OriginalChangedError:
                 if concurrency_check:
                     abort(412, description="Client and server etags don't match")

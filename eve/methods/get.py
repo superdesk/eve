@@ -11,7 +11,6 @@
     :license: BSD, see LICENSE for more details.
 """
 from __future__ import division
-from inspect import isawaitable
 
 import copy
 import math
@@ -19,6 +18,7 @@ import math
 import simplejson as json
 from quart import abort, current_app as app, request
 from werkzeug.datastructures import MultiDict
+from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
 from eve.utils import config, home_link, parse_request, querydef
@@ -27,7 +27,7 @@ from eve.versioning import (diff_document, get_old_document,
 
 from .common import (build_response_document, document_link, epoch,
                      last_updated, pre_event, ratelimit,
-                     resolve_embedded_fields, resource_link)
+                     resolve_embedded_fields, resource_link, async_data_wrapper)
 
 
 @ratelimit()
@@ -212,7 +212,7 @@ async def _perform_aggregation(resource, pipeline, options):
     # (skip, limit) cannot be accessed.
     req_pipeline_pruned.append(facet)
 
-    cursor = app.data.aggregate(resource, req_pipeline_pruned, options).next()
+    cursor = (await async_data_wrapper("aggregate", resource, req_pipeline_pruned, options)).next()
 
     for document in cursor["paginated_results"]:
         documents.append(document)
@@ -253,23 +253,29 @@ async def _perform_find(resource, lookup):
     # If-Modified-Since disabled on collections (#334)
     req.if_modified_since = None
 
-    find_response = app.data.find(
-        resource, req, lookup, perform_count=not config.OPTIMIZE_PAGINATION_FOR_SPEED
+    cursor, count = await async_data_wrapper(
+        "find", resource, req, lookup, perform_count=not config.OPTIMIZE_PAGINATION_FOR_SPEED
     )
-    if isawaitable(find_response):
-        cursor, count = await find_response
-    else:
-        cursor, count = find_response
 
     # If soft delete is enabled, data.find will not include items marked
     # deleted unless req.show_deleted is True
-    for document in cursor:
-        await build_response_document(document, resource, embedded_fields)
-        documents.append(document)
 
-        # build last update for entire response
-        if document[config.LAST_UPDATED] > last_update:
-            last_update = document[config.LAST_UPDATED]
+    if isinstance(cursor, AsyncIOMotorCursor):
+        async for document in cursor:
+            await build_response_document(document, resource, embedded_fields)
+            documents.append(document)
+
+            # build last update for entire response
+            if document[config.LAST_UPDATED] > last_update:
+                last_update = document[config.LAST_UPDATED]
+    else:
+        for document in cursor:
+            await build_response_document(document, resource, embedded_fields)
+            documents.append(document)
+
+            # build last update for entire response
+            if document[config.LAST_UPDATED] > last_update:
+                last_update = document[config.LAST_UPDATED]
 
     status = 200
     headers = []
@@ -388,9 +394,7 @@ async def getitem_internal(resource, **lookup):
         # They are handled and included in 404 responses below.
         req.show_deleted = True
 
-    document = app.data.find_one(resource, req, **lookup)
-    if isawaitable(document):
-        document = await document
+    document = await async_data_wrapper("find_one", resource, req, **lookup)
 
     if not document:
         abort(404)
@@ -453,11 +457,7 @@ async def getitem_internal(resource, **lookup):
             req.sort = '[("%s", 1)]' % config.VERSION
         req.if_modified_since = None  # we always want the full history here
 
-        find_response = app.data.find(resource + config.VERSIONS, req, lookup)
-        if isawaitable(find_response):
-            cursor, count = await find_response
-        else:
-            cursor, count = find_response
+        cursor, count = await async_data_wrapper("find", resource + config.VERSIONS, req, lookup)
 
         # build all versions
         documents = []
