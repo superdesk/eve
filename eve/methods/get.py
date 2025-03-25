@@ -471,26 +471,51 @@ async def getitem_internal(resource, **lookup):
             # if we aren't starting on page 1, then we need to init last_doc
             if version == "diffs" and req.page > 1:
                 # grab the last document on the previous page to diff from
-                last_version = cursor[0][app.config["VERSION"]] - 1
+
+                if isinstance(cursor, AsyncIOMotorCursor):
+                    last_version = (await cursor.next())[app.config["VERSION"]] - 1
+                    cursor.rewind()
+                else:
+                    last_version = cursor[0][app.config["VERSION"]] - 1
+
                 last_document = get_old_document(
                     resource, req, lookup, latest_doc, last_version
                 )
 
-            for i, document in enumerate(cursor):
-                document = synthesize_versioned_document(
-                    latest_doc, document, resource_def
-                )
-                await build_response_document(document, resource, embedded_fields, latest_doc)
-                if version == "diffs":
-                    if i == 0:
-                        documents.append(document)
+            if isinstance(cursor, AsyncIOMotorCursor):
+                i = 0
+                async for document in cursor:
+                    document = synthesize_versioned_document(
+                        latest_doc, document, resource_def
+                    )
+                    await build_response_document(document, resource, embedded_fields, latest_doc)
+                    if version == "diffs":
+                        if i == 0:
+                            documents.append(document)
+                        else:
+                            documents.append(
+                                diff_document(resource_def, last_document, document)
+                            )
+                        last_document = document
                     else:
-                        documents.append(
-                            diff_document(resource_def, last_document, document)
-                        )
-                    last_document = document
-                else:
-                    documents.append(document)
+                        documents.append(document)
+                    i += 1
+            else:
+                for i, document in enumerate(cursor):
+                    document = synthesize_versioned_document(
+                        latest_doc, document, resource_def
+                    )
+                    await build_response_document(document, resource, embedded_fields, latest_doc)
+                    if version == "diffs":
+                        if i == 0:
+                            documents.append(document)
+                        else:
+                            documents.append(
+                                diff_document(resource_def, last_document, document)
+                            )
+                        last_document = document
+                    else:
+                        documents.append(document)
 
         # add documents to response
         if config.DOMAIN[resource]["hateoas"]:

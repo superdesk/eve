@@ -13,6 +13,7 @@
 import copy
 
 from quart import abort, current_app as app
+from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
 from eve.methods.common import (get_document, oplog_push, pre_event, ratelimit,
@@ -215,7 +216,12 @@ async def delete(resource, **lookup):
         # callers must handle soft deleted documents
         default_request.show_deleted = True
     result, _ = await async_data_wrapper("find", resource, default_request, lookup)
-    originals = list(result)
+
+    if isinstance(result, AsyncIOMotorCursor):
+        originals = await result.to_list()
+    else:
+        originals = list(result)
+
     if not originals:
         return all_done()
     # I add new callback as I want the framework to be retro-compatible
