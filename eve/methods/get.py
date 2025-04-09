@@ -21,13 +21,13 @@ from werkzeug.datastructures import MultiDict
 from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
-from eve.utils import config, home_link, parse_request, querydef
+from eve.utils import config, home_link, parse_request, querydef, async_method_wrapper
 from eve.versioning import (diff_document, get_old_document,
                             synthesize_versioned_document, versioned_id_field)
 
 from .common import (build_response_document, document_link, epoch,
                      last_updated, pre_event, ratelimit,
-                     resolve_embedded_fields, resource_link, async_data_wrapper)
+                     resolve_embedded_fields, resource_link)
 
 
 @ratelimit()
@@ -205,19 +205,19 @@ async def _perform_aggregation(resource, pipeline, options):
 
     facet = {"$facet": facet_pipelines}
 
-    getattr(app, "before_aggregation")(resource, req_pipeline_pruned)
+    await getattr(app, "before_aggregation").call_async(resource, req_pipeline_pruned)
 
     # Appending $facet afer the before_aggregation hook allows for
     # easy modification of the orginal pipline, however, pagination
     # (skip, limit) cannot be accessed.
     req_pipeline_pruned.append(facet)
 
-    cursor = (await async_data_wrapper("aggregate", resource, req_pipeline_pruned, options)).next()
+    cursor = (await async_method_wrapper(app.data, "aggregate", resource, req_pipeline_pruned, options)).next()
 
     for document in cursor["paginated_results"]:
         documents.append(document)
 
-    getattr(app, "after_aggregation")(resource, documents)
+    await getattr(app, "after_aggregation").call_async(resource, documents)
 
     response[config.ITEMS] = documents
 
@@ -253,8 +253,8 @@ async def _perform_find(resource, lookup):
     # If-Modified-Since disabled on collections (#334)
     req.if_modified_since = None
 
-    cursor, count = await async_data_wrapper(
-        "find", resource, req, lookup, perform_count=not config.OPTIMIZE_PAGINATION_FOR_SPEED
+    cursor, count = await async_method_wrapper(
+        app.data, "find", resource, req, lookup, perform_count=not config.OPTIMIZE_PAGINATION_FOR_SPEED
     )
 
     # If soft delete is enabled, data.find will not include items marked
@@ -394,7 +394,7 @@ async def getitem_internal(resource, **lookup):
         # They are handled and included in 404 responses below.
         req.show_deleted = True
 
-    document = await async_data_wrapper("find_one", resource, req, **lookup)
+    document = await async_method_wrapper(app.data, "find_one", resource, req, **lookup)
 
     if not document:
         abort(404)
@@ -457,7 +457,7 @@ async def getitem_internal(resource, **lookup):
             req.sort = '[("%s", 1)]' % config.VERSION
         req.if_modified_since = None  # we always want the full history here
 
-        cursor, count = await async_data_wrapper("find", resource + config.VERSIONS, req, lookup)
+        cursor, count = await async_method_wrapper(app.data, "find", resource + config.VERSIONS, req, lookup)
 
         # build all versions
         documents = []

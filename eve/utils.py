@@ -15,6 +15,7 @@ import sys
 from copy import deepcopy
 from datetime import datetime, timedelta
 from importlib import import_module
+from inspect import isawaitable
 
 import werkzeug.exceptions
 from bson import UuidRepresentation
@@ -567,3 +568,11 @@ def import_from_string(module_name):
         return getattr(import_module(module_path), attr)
     except (ImportError, AttributeError):
         raise ImportError("Cannot import {}".format(module_name))
+
+
+async def async_method_wrapper(instance, method: str, *args, **kwargs):
+    func = getattr(instance, f"{method}_async", getattr(instance, method))
+    response = func(*args, **kwargs)
+    if isawaitable(response):
+        response = await response
+    return response

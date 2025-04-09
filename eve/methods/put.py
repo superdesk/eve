@@ -22,9 +22,9 @@ from eve.methods.common import (pre_event, ratelimit, resolve_document_etag,
                                 resolve_embedded_fields,
                                 resolve_sub_resource_path,
                                 resolve_user_restricted_access,
-                                store_media_files, utcnow, async_data_wrapper)
+                                store_media_files, utcnow)
 from eve.methods.post import post_internal
-from eve.utils import config, debug_error_message, parse_request
+from eve.utils import config, debug_error_message, parse_request, async_method_wrapper
 from eve.versioning import (insert_versioning_documents, late_versioning_catch,
                             resolve_document_version)
 
@@ -192,7 +192,7 @@ async def put_internal(
                 document[resource_def["id_field"]] = object_id
 
             resolve_user_restricted_access(document, resource)
-            store_media_files(document, resource, original)
+            await store_media_files(document, resource, original)
             resolve_document_version(document, resource, "PUT", original)
 
             # notify callbacks
@@ -203,7 +203,7 @@ async def put_internal(
 
             # write to db
             try:
-                await async_data_wrapper("replace", resource, object_id, document, original)
+                await async_method_wrapper(app.data,"replace", resource, object_id, document, original)
             except app.data.OriginalChangedError:
                 if concurrency_check:
                     abort(412, description="Client and server etags don't match")

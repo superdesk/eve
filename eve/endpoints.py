@@ -198,6 +198,7 @@ async def media_endpoint(_id):
     if request.method == "OPTIONS":
         return await send_response(None, (None))
 
+    # Skipping this one - as Superdesk based apps don't use it
     file_ = app.media.get(_id)
     if file_ is None:
         return abort(404)

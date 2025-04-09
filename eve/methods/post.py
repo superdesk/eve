@@ -21,8 +21,8 @@ from eve.methods.common import (build_response_document,
                                 resolve_document_etag, resolve_embedded_fields,
                                 resolve_sub_resource_path,
                                 resolve_user_restricted_access, resource_link,
-                                store_media_files, utcnow, async_data_wrapper)
-from eve.utils import config, debug_error_message, parse_request
+                                store_media_files, utcnow)
+from eve.utils import config, debug_error_message, parse_request, async_method_wrapper
 from eve.versioning import (insert_versioning_documents,
                             resolve_document_version)
 
@@ -209,7 +209,7 @@ async def post_internal(resource, payl=None, skip_validation=False):
                     document[config.DELETED] = False
 
                 resolve_user_restricted_access(document, resource)
-                store_media_files(document, resource)
+                await store_media_files(document, resource)
                 resolve_document_version(document, resource, "POST")
             else:
                 # validation errors added to list of document issues
@@ -250,7 +250,7 @@ async def post_internal(resource, payl=None, skip_validation=False):
         resolve_document_etag(documents, resource)
 
         # bulk insert
-        ids = await async_data_wrapper("insert", resource, documents)
+        ids = await async_method_wrapper(app.data, "insert", resource, documents)
 
         # update oplog if needed
         await oplog_push(resource, documents, "POST")

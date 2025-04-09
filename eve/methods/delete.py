@@ -11,14 +11,15 @@
 """
 
 import copy
+from inspect import isawaitable
 
 from quart import abort, current_app as app
 from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
 from eve.methods.common import (get_document, oplog_push, pre_event, ratelimit,
-                                resolve_document_etag, utcnow, async_data_wrapper)
-from eve.utils import ParsedRequest, config
+                                resolve_document_etag, utcnow)
+from eve.utils import ParsedRequest, config, async_method_wrapper
 from eve.versioning import (insert_versioning_documents, late_versioning_catch,
                             resolve_document_version, versioned_id_field)
 
@@ -123,7 +124,7 @@ async def deleteitem_internal(
         # Update document in database (including version collection if needed)
         id = original[resource_def["id_field"]]
         try:
-            await async_data_wrapper("replace", resource, id, marked_document, original)
+            await async_method_wrapper(app.data, "replace", resource, id, marked_document, original)
         except app.data.OriginalChangedError:
             if concurrency_check:
                 abort(412, description="Client and server etags don't match")
@@ -150,24 +151,25 @@ async def deleteitem_internal(
             # get_document() call since it also deals with etag matching, which
             # is still needed. Also, this lookup should never fail.
             # TODO not happy with this hack. Not at all. Is there a better way?
-            original = await async_data_wrapper("find_one_raw", resource, **lookup)
+            original = await async_method_wrapper(app.data, "find_one_raw", resource, **lookup)
 
         for field in media_fields:
             if field in original:
                 media_field = original[field]
                 if isinstance(media_field, list):
                     for file_id in media_field:
-                        app.media.delete(file_id, resource)
+                        await async_method_wrapper(app.media, "delete", file_id, resource)
                 else:
-                    app.media.delete(original[field], resource)
+                    await async_method_wrapper(app.media, "delete", original[field], resource)
 
         id = original[resource_def["id_field"]]
-        await async_data_wrapper("remove", resource, lookup)
+        await async_method_wrapper(app.data, "remove", resource, lookup)
 
         # TODO: should attempt to delete version collection even if setting is
         # off
         if app.config["DOMAIN"][resource]["versioning"] is True:
-            await async_data_wrapper(
+            await async_method_wrapper(
+                app.data,
                 "remove",
                 resource + config.VERSIONS,
                 {versioned_id_field(resource_def): original[resource_def["id_field"]]},
@@ -215,7 +217,7 @@ async def delete(resource, **lookup):
         # get_document should always fetch soft deleted documents from the db
         # callers must handle soft deleted documents
         default_request.show_deleted = True
-    result, _ = await async_data_wrapper("find", resource, default_request, lookup)
+    result, _ = await async_method_wrapper(app.data, "find", resource, default_request, lookup)
 
     if isinstance(result, AsyncIOMotorCursor):
         originals = await result.to_list()
@@ -250,12 +252,12 @@ async def delete(resource, **lookup):
         # deleted by use of this global method (it should be disabled). Media
         # cleanup is handled at the item endpoint by the delete() method
         # (see above).
-        await async_data_wrapper("remove", resource, lookup)
+        await async_method_wrapper(app.data, "remove", resource, lookup)
 
         # TODO: should attempt to delete version collection even if setting is
         # off
         if resource_def["versioning"] is True:
-            await async_data_wrapper("remove", resource + config.VERSIONS, lookup)
+            await async_method_wrapper(app.data, "remove", resource + config.VERSIONS, lookup)
 
     await getattr(app, "on_deleted_resource").call_async(resource)
     await getattr(app, "on_deleted_resource_%s" % resource).call_async()

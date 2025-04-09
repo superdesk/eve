@@ -34,16 +34,9 @@ from eve.utils import (
     debug_error_message,
     document_etag,
     parse_request,
+    async_method_wrapper,
 )
 from eve.versioning import get_data_version_relation_document, resolve_document_version
-
-
-async def async_data_wrapper(method: str, *args, **kwargs):
-    func = getattr(app.data, f"{method}_async", getattr(app.data, method))
-    response = func(*args, **kwargs)
-    if isawaitable(response):
-        response = await response
-    return response
 
 
 async def get_document(
@@ -99,7 +92,8 @@ async def get_document(
     if original:
         document = original
     else:
-        document = await async_data_wrapper(
+        document = await async_method_wrapper(
+            app.data,
             "find_one",
             resource,
             req,
@@ -667,7 +661,7 @@ async def build_response_document(document, resource, embedded_fields, latest_do
     resolve_document_version(document, resource, "GET", latest_doc)
 
     # resolve media
-    resolve_media_files(document, resource)
+    await resolve_media_files(document, resource)
 
     # resolve soft delete
     if resource_def["soft_delete"] is True:
@@ -916,8 +910,8 @@ async def embedded_document(references, data_relation, field_name):
             subresources_query,
         ) = generate_query_and_sorting_criteria(data_relation, references)
         for subresource in subresources_query:
-            result, _ = await async_data_wrapper(
-                "find", subresource, None, subresources_query[subresource]
+            result, _ = await async_method_wrapper(
+                app.data, "find", subresource, None, subresources_query[subresource]
             )
 
             if isinstance(result, AsyncIOMotorCursor):
@@ -931,7 +925,7 @@ async def embedded_document(references, data_relation, field_name):
                 )
             else:
                 for embedded_doc in list_embedded_doc:
-                    resolve_media_files(embedded_doc, subresource)
+                    await resolve_media_files(embedded_doc, subresource)
                 embedded_docs.extend(list_embedded_doc)
 
         # After having retrieved my data, I have to be sure that the sorting of
@@ -1129,7 +1123,7 @@ async def resolve_embedded_documents(document, resource, embedded_fields):
             subdocument[last_field] = await getter(subdocument[last_field])
 
 
-def resolve_media_files(document, resource):
+async def resolve_media_files(document, resource):
     """Embed media files into the response document.
 
     :param document: the document eventually containing the media files.
@@ -1141,21 +1135,21 @@ def resolve_media_files(document, resource):
         if isinstance(document[field], list):
             resolved_list = []
             for file_id in document[field]:
-                resolved_list.append(resolve_one_media(file_id, resource))
+                resolved_list.append(await resolve_one_media(file_id, resource))
             document[field] = resolved_list
         else:
-            document[field] = resolve_one_media(document[field], resource)
+            document[field] = await resolve_one_media(document[field], resource)
 
 
-def resolve_one_media(file_id, resource):
+async def resolve_one_media(file_id, resource):
     """Get response for one media file"""
-    _file = app.media.get(file_id, resource)
+    _file = await async_method_wrapper(app.media, "get", file_id, resource)
 
     if _file:
         # otherwise we have a valid file and should send extended response
         # start with the basic file object
         if config.RETURN_MEDIA_AS_BASE64_STRING:
-            ret_file = base64.b64encode(_file.read())
+            ret_file = base64.b64encode(await async_method_wrapper(_file, "read"))
         elif config.RETURN_MEDIA_AS_URL:
             prefix = (
                 config.MEDIA_BASE_URL
@@ -1218,7 +1212,7 @@ def marshal_write_response(document, resource):
     return document
 
 
-def store_media_files(document, resource, original=None):
+async def store_media_files(document, resource, original=None):
     """Store any media file in the underlying media store and update the
     document with unique ids of stored files.
 
@@ -1241,9 +1235,9 @@ def store_media_files(document, resource, original=None):
             # system, we first need to delete the files being replaced.
             if isinstance(original[field], list):
                 for file_id in original[field]:
-                    app.media.delete(file_id, resource)
+                    await async_method_wrapper(app.media, "delete", file_id, resource)
             else:
-                app.media.delete(original[field], resource)
+                await async_method_wrapper(app.media, "delete", original[field], resource)
 
         if document[field]:
             # store files and update document with file's unique id/filename
@@ -1252,7 +1246,9 @@ def store_media_files(document, resource, original=None):
                 id_lst = []
                 for stor_obj in document[field]:
                     id_lst.append(
-                        app.media.put(
+                        await async_method_wrapper(
+                            app.media,
+                            "put",
                             stor_obj,
                             filename=stor_obj.filename,
                             content_type=stor_obj.mimetype,
@@ -1261,7 +1257,9 @@ def store_media_files(document, resource, original=None):
                     )
                 document[field] = id_lst
             else:
-                document[field] = app.media.put(
+                document[field] = await async_method_wrapper(
+                    app.media,
+                    "put",
                     document[field],
                     filename=document[field].filename,
                     content_type=document[field].mimetype,
@@ -1542,7 +1540,7 @@ async def oplog_push(resource, document, op, id=None):
         # notify callbacks
         await getattr(app, "on_oplog_push").call_async(resource, entries)
         # oplog push
-        await async_data_wrapper("insert", config.OPLOG_NAME, entries)
+        await async_method_wrapper(app.data, "insert", config.OPLOG_NAME, entries)
 
 
 def utcnow():

@@ -18,12 +18,12 @@ from werkzeug import exceptions
 
 from eve.auth import requires_auth
 from eve.methods.common import (build_response_document, get_document,
-                                marshal_write_response, oplog_push, parse, async_data_wrapper)
+                                marshal_write_response, oplog_push, parse)
 from eve.methods.common import payload as payload_
 from eve.methods.common import (pre_event, ratelimit, resolve_document_etag,
                                 resolve_embedded_fields, store_media_files,
                                 utcnow)
-from eve.utils import config, debug_error_message, parse_request
+from eve.utils import config, debug_error_message, parse_request, async_method_wrapper
 from eve.versioning import (insert_versioning_documents, late_versioning_catch,
                             resolve_document_version)
 
@@ -185,7 +185,7 @@ async def patch_internal(
             # sneak in a shadow copy if it wasn't already there
             late_versioning_catch(original, resource)
 
-            store_media_files(updates, resource, original)
+            await store_media_files(updates, resource, original)
             resolve_document_version(updates, resource, "PATCH", original)
 
             # some datetime precision magic
@@ -219,7 +219,7 @@ async def patch_internal(
                 # now storing the (updated) ETAG with every document (#453)
                 updates[config.ETAG] = updated[config.ETAG]
             try:
-                await async_data_wrapper("update", resource, object_id, updates, original)
+                await async_method_wrapper(app.data, "update", resource, object_id, updates, original)
             except app.data.OriginalChangedError:
                 if concurrency_check:
                     abort(412, description="Client and server etags don't match")
