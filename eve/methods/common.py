@@ -26,7 +26,6 @@ from bson.errors import InvalidId
 from cerberus import rules_set_registry, schema_registry
 from quart import abort, current_app as app, g, request
 from werkzeug.datastructures import CombinedMultiDict, MultiDict
-from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.utils import (
     auto_fields,
@@ -35,6 +34,7 @@ from eve.utils import (
     document_etag,
     parse_request,
     async_method_wrapper,
+    is_async_cursor,
 )
 from eve.versioning import get_data_version_relation_document, resolve_document_version
 
@@ -914,7 +914,7 @@ async def embedded_document(references, data_relation, field_name):
                 app.data, "find", subresource, None, subresources_query[subresource]
             )
 
-            if isinstance(result, AsyncIOMotorCursor):
+            if is_async_cursor(result):
                 list_embedded_doc = await result.to_list()
             else:
                 list_embedded_doc = list(result)

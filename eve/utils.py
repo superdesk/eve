@@ -10,6 +10,7 @@
     :license: BSD, see LICENSE for more details.
 """
 
+from typing import Any
 import hashlib
 import sys
 from copy import deepcopy
@@ -576,3 +577,7 @@ async def async_method_wrapper(instance, method: str, *args, **kwargs):
     if isawaitable(response):
         response = await response
     return response
+
+
+def is_async_cursor(cursor: Any) -> bool:
+    return hasattr(cursor, "__aiter__")

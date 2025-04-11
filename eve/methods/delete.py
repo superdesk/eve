@@ -11,15 +11,13 @@
 """
 
 import copy
-from inspect import isawaitable
 
 from quart import abort, current_app as app
-from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
 from eve.methods.common import (get_document, oplog_push, pre_event, ratelimit,
                                 resolve_document_etag, utcnow)
-from eve.utils import ParsedRequest, config, async_method_wrapper
+from eve.utils import ParsedRequest, config, async_method_wrapper, is_async_cursor
 from eve.versioning import (insert_versioning_documents, late_versioning_catch,
                             resolve_document_version, versioned_id_field)
 
@@ -219,7 +217,7 @@ async def delete(resource, **lookup):
         default_request.show_deleted = True
     result, _ = await async_method_wrapper(app.data, "find", resource, default_request, lookup)
 
-    if isinstance(result, AsyncIOMotorCursor):
+    if is_async_cursor(result):
         originals = await result.to_list()
     else:
         originals = list(result)

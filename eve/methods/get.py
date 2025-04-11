@@ -18,10 +18,9 @@ import math
 import simplejson as json
 from quart import abort, current_app as app, request
 from werkzeug.datastructures import MultiDict
-from motor.motor_asyncio import AsyncIOMotorCursor
 
 from eve.auth import requires_auth
-from eve.utils import config, home_link, parse_request, querydef, async_method_wrapper
+from eve.utils import config, home_link, parse_request, querydef, async_method_wrapper, is_async_cursor
 from eve.versioning import (diff_document, get_old_document,
                             synthesize_versioned_document, versioned_id_field)
 
@@ -260,7 +259,7 @@ async def _perform_find(resource, lookup):
     # If soft delete is enabled, data.find will not include items marked
     # deleted unless req.show_deleted is True
 
-    if isinstance(cursor, AsyncIOMotorCursor):
+    if is_async_cursor(cursor):
         async for document in cursor:
             await build_response_document(document, resource, embedded_fields)
             documents.append(document)
@@ -472,7 +471,7 @@ async def getitem_internal(resource, **lookup):
             if version == "diffs" and req.page > 1:
                 # grab the last document on the previous page to diff from
 
-                if isinstance(cursor, AsyncIOMotorCursor):
+                if is_async_cursor(cursor):
                     last_version = (await cursor.next())[app.config["VERSION"]] - 1
                     cursor.rewind()
                 else:
@@ -482,7 +481,7 @@ async def getitem_internal(resource, **lookup):
                     resource, req, lookup, latest_doc, last_version
                 )
 
-            if isinstance(cursor, AsyncIOMotorCursor):
+            if is_async_cursor(cursor):
                 i = 0
                 async for document in cursor:
                     document = synthesize_versioned_document(
