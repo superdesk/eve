@@ -1406,6 +1406,14 @@ def document_link(resource, document_id, version=None):
     .. versionchanged:: 0.0.3
        Now returning a JSON link
     """
+
+    link = None
+    if hasattr(app, "get_eve_document_link"):
+        link = app.get_eve_document_link(resource, document_id, version)
+
+    if link:
+        return link
+
     version_part = "?version=%s" % version if version else ""
     return {
         "title": "%s" % config.DOMAIN[resource]["item_title"],
