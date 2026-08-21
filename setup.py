@@ -14,7 +14,7 @@ with io.open("eve/__init__.py", "rt", encoding="utf8") as f:
 
 INSTALL_REQUIRES = [
     "cerberus>=1.1,<2.0",
-    "quart @ git+https://github.com/MarkLark86/quart@fix-test-client-with-utf8-url",
+    "quart>=0.22.0",
     "pymongo",
     "simplejson>=3.3.0,<4.0",
 ]
